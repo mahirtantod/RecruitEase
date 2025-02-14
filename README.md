@@ -1,64 +1,52 @@
-# RecruitEase - Interactive Recruitment Chatbot
+# Recruitment Portal with Interactive Chatbot
 
-A modern recruitment chatbot system that interacts with candidates, collects their information, and records introduction videos.
+A Flask-based recruitment portal with an interactive chatbot for job applications.
 
 ## Features
 
-- Interactive chatbot for candidate screening
-- Basic information collection (name, education, skills)
-- Live video recording for candidate introductions
-- User-friendly interface
-- Data storage for candidate information
+- Interactive chatbot for job applications
+- Admin dashboard for job management
+- Candidate tracking system
+- File upload support for resumes and videos
+- Real-time job status updates
 
-## Project Structure
-
-```
-RecruitEase/
-├── static/
-│   ├── css/
-│   │   └── style.css
-│   └── js/
-│       └── main.js
-├── templates/
-│   └── index.html
-├── app/
-│   ├── __init__.py
-│   ├── models.py
-│   ├── routes.py
-│   └── chatbot.py
-├── instance/
-├── requirements.txt
-├── config.py
-└── run.py
-```
-
-## Setup Instructions
+## Local Development
 
 1. Clone the repository
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   ```
-3. Activate the virtual environment:
-   - Windows: `venv\Scripts\activate`
-   - Linux/Mac: `source venv/bin/activate`
-4. Install dependencies:
-   ```
+2. Install dependencies:
+   ```bash
    pip install -r requirements.txt
    ```
-5. Run the application:
-   ```
+3. Run the application:
+   ```bash
    python run.py
    ```
 
-## Technology Stack
+## Deployment to Render
 
-- Backend: Python Flask
-- Frontend: HTML, CSS, JavaScript
-- Database: SQLAlchemy
-- Video Handling: OpenCV
-- UI Framework: Bootstrap
+1. Create a new account on [Render](https://render.com)
+2. Click "New +" and select "Web Service"
+3. Connect your GitHub repository
+4. Fill in the following details:
+   - Name: recruitment-portal
+   - Environment: Python 3
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn -c gunicorn.conf.py run:app`
+5. Add the following environment variables:
+   - `SECRET_KEY`: Your secret key
+   - `DATABASE_URL`: Your database URL (Render will provide this)
+   - `UPLOAD_FOLDER`: Path for uploads
 
-## Development Status
+## Environment Variables
 
-Current Version: 1.0.0 (Basic Chatbot Implementation)
+- `SECRET_KEY`: Flask secret key
+- `DATABASE_URL`: Database connection URL
+- `UPLOAD_FOLDER`: Path for file uploads
+
+## Database Migrations
+
+```bash
+flask db init
+flask db migrate
+flask db upgrade
+```

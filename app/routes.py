@@ -1,96 +1,114 @@
-from flask import Blueprint, jsonify, request, render_template, current_app, session, send_from_directory
-from app.models import Candidate
-from app import db
+from flask import Blueprint, render_template, request, jsonify, current_app, session, redirect, url_for, send_from_directory
+from app.models import db, Candidate, Job
 import os
+from werkzeug.utils import secure_filename
+import re
 from datetime import datetime
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+ALLOWED_RESUME_EXTENSIONS = {'pdf', 'doc', 'docx'}
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'mov'}
+
+def allowed_file(filename, allowed_extensions):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+def save_file(file, subfolder):
+    if file:
+        try:
+            # Get the current timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            # Secure the filename and add timestamp
+            filename = secure_filename(file.filename)
+            filename = f"{timestamp}_{filename}"
+            
+            # Create the full path
+            upload_folder = current_app.config['UPLOAD_FOLDER']
+            subfolder_path = os.path.join(upload_folder, subfolder)
+            
+            # Ensure the directory exists
+            os.makedirs(subfolder_path, exist_ok=True)
+            
+            # Save the file
+            file_path = os.path.join(subfolder_path, filename)
+            file.save(file_path)
+            logger.info(f"File saved successfully at: {file_path}")
+            
+            return filename
+        except Exception as e:
+            logger.error(f"Error saving file: {str(e)}")
+            return None
+    return None
 
 main = Blueprint('main', __name__)
 
-# Create videos directory if it doesn't exist
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'videos')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 @main.route('/')
 def index():
-    session.clear()  # Clear any existing session
-    return render_template('index.html')
+    """Redirect to admin if no specific job link"""
+    return redirect(url_for('admin.index'))
 
-@main.route('/api/chat', methods=['POST'])
-def chat():
-    data = request.json
-    message = data.get('message', '').lower()
-    conversation_state = session.get('state', 'initial')
-    
-    # Initialize session if not exists
-    if 'state' not in session:
+@main.route('/apply/<link_hash>')
+def apply(link_hash):
+    """Handle job-specific application"""
+    try:
+        logger.info(f"Accessing job with link_hash: {link_hash}")
+        
+        job = Job.query.filter_by(link_hash=link_hash).first()
+        if not job:
+            logger.error(f"No job found with link_hash: {link_hash}")
+            return render_template('error.html', message="Job not found"), 404
+            
+        logger.info(f"Found job: {job.id} - {job.title}")
+        
+        if job.is_expired():
+            logger.info(f"Job {job.id} has expired")
+            return render_template('expired.html')
+        
+        if not job.is_active:
+            logger.info(f"Job {job.id} is inactive")
+            return render_template('inactive.html')
+        
+        # Store job_id in session
+        session['job_id'] = job.id
         session['state'] = 'initial'
-    
-    # Chatbot logic based on conversation state
-    if conversation_state == 'initial':
-        session['state'] = 'asking_first_name'
-        return jsonify({'response': 'Welcome! I\'m excited to learn about you. Let\'s start with your first name:'})
-    
-    elif conversation_state == 'asking_first_name':
-        session['first_name'] = message
-        session['state'] = 'asking_middle_name'
-        return jsonify({'response': 'Great! Do you have a middle name? If not, just type "no":'})
-    
-    elif conversation_state == 'asking_middle_name':
-        if message.lower() != 'no':
-            session['middle_name'] = message
-        session['state'] = 'asking_last_name'
-        return jsonify({'response': 'Now, please tell me your last name:'})
-    
-    elif conversation_state == 'asking_last_name':
-        session['last_name'] = message
-        session['state'] = 'asking_email'
-        return jsonify({'response': 'Perfect! What\'s your email address?'})
-    
-    elif conversation_state == 'asking_email':
-        session['email'] = message
-        session['state'] = 'asking_education'
-        return jsonify({'response': 'What\'s your highest level of education and field of study?'})
-    
-    elif conversation_state == 'asking_education':
-        session['education'] = message
-        session['state'] = 'asking_cgpa'
-        return jsonify({'response': 'What was your CGPA?'})
-    
-    elif conversation_state == 'asking_cgpa':
-        try:
-            session['cgpa'] = float(message)
-            session['state'] = 'asking_skills'
-            return jsonify({'response': 'Impressive! Now, please list your key technical skills:'})
-        except ValueError:
-            return jsonify({'response': 'Please enter a valid CGPA (e.g., 3.5):'})
-    
-    elif conversation_state == 'asking_skills':
-        session['skills'] = message
-        session['state'] = 'asking_projects'
-        return jsonify({'response': 'Tell me about your notable projects:'})
-    
-    elif conversation_state == 'asking_projects':
-        session['projects'] = message
-        session['state'] = 'asking_achievements'
-        return jsonify({'response': 'Any achievements you\'d like to share? (Optional, type "skip" if none):'})
-    
-    elif conversation_state == 'asking_achievements':
-        if message.lower() != 'skip':
-            session['achievements'] = message
-        session['state'] = 'asking_video'
-        return jsonify({'response': f'Thank you, {session.get("first_name")}! Finally, I\'d like you to record a short introduction video. Click the "Record Video" button when you\'re ready.'})
-    
-    elif conversation_state == 'asking_video':
-        session['state'] = 'video_requested'
-        return jsonify({'response': 'Please click the "Record Video" button to record your introduction video.'})
-    
-    elif conversation_state == 'video_recorded':
-        session['state'] = 'completed'
-        full_name = f"{session.get('first_name')} {session.get('middle_name', '')} {session.get('last_name')}".strip()
-        return jsonify({'response': f'Thank you, {full_name}! Your application has been successfully submitted. We appreciate your time and will review your application soon.'})
-    
-    else:
-        return jsonify({'response': "I didn't quite catch that. Could you please repeat?"})
+        session['candidate_data'] = {}
+        
+        logger.info(f"Session initialized for job {job.id}")
+        return render_template('index.html', job=job)
+        
+    except Exception as e:
+        logger.error(f"Error in apply route: {str(e)}")
+        return render_template('error.html', message="An error occurred. Please try again later."), 500
+
+@main.route('/api/upload-resume', methods=['POST'])
+def upload_resume():
+    try:
+        if 'resume' not in request.files:
+            return jsonify({'error': 'No resume file provided'}), 400
+        
+        file = request.files['resume']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+        
+        if not allowed_file(file.filename, ALLOWED_RESUME_EXTENSIONS):
+            return jsonify({'error': 'Invalid file type'}), 400
+        
+        filename = save_file(file, 'resumes')
+        if filename:
+            # Store the filename in session with the resumes/ prefix
+            candidate_data = session.get('candidate_data', {})
+            candidate_data['resume_attachments'] = os.path.join('resumes', filename)
+            session['candidate_data'] = candidate_data
+            return jsonify({'message': 'Resume uploaded successfully'}), 200
+        else:
+            return jsonify({'error': 'Error saving file'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error uploading resume: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @main.route('/api/upload-video', methods=['POST'])
 def upload_video():
@@ -98,64 +116,263 @@ def upload_video():
         if 'video' not in request.files:
             return jsonify({'error': 'No video file provided'}), 400
         
-        video_file = request.files['video']
-        if video_file.filename == '':
-            return jsonify({'error': 'No video file selected'}), 400
+        file = request.files['video']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
         
-        # Create a unique filename using timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'video_{timestamp}.webm'
-        video_path = os.path.join(UPLOAD_FOLDER, filename)
+        if not allowed_file(file.filename, ALLOWED_VIDEO_EXTENSIONS):
+            return jsonify({'error': 'Invalid file type'}), 400
         
-        # Save the video file
-        video_file.save(video_path)
-        
-        # Store the relative path in session
-        session['video_path'] = f'/static/videos/{filename}'
-        
-        return jsonify({
-            'message': 'Video uploaded successfully',
-            'video_path': session['video_path']
-        })
-    
+        filename = save_file(file, 'videos')
+        if filename:
+            # Store the filename in session with the videos/ prefix
+            candidate_data = session.get('candidate_data', {})
+            candidate_data['self_introduction_video'] = os.path.join('videos', filename)
+            session['candidate_data'] = candidate_data
+            return jsonify({'message': 'Video uploaded successfully'}), 200
+        else:
+            return jsonify({'error': 'Error saving file'}), 500
+            
     except Exception as e:
+        logger.error(f"Error uploading video: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@main.route('/api/save-candidate', methods=['POST'])
-def save_candidate():
+@main.route('/uploads/<path:filename>')
+def uploaded_file(filename):
     try:
-        candidate = Candidate(
-            first_name=session.get('first_name'),
-            middle_name=session.get('middle_name'),
-            last_name=session.get('last_name'),
-            email=session.get('email'),
-            education=session.get('education'),
-            cgpa=session.get('cgpa'),
-            skills=session.get('skills'),
-            projects=session.get('projects'),
-            achievements=session.get('achievements'),
-            video_path=session.get('video_path')
-        )
-        
-        db.session.add(candidate)
-        db.session.commit()
-        
-        return jsonify({'message': 'Candidate information saved successfully!'})
+        directory = os.path.dirname(filename)
+        file_name = os.path.basename(filename)
+        upload_path = os.path.join(current_app.config['UPLOAD_FOLDER'], directory)
+        logger.info(f"Serving file: {file_name} from directory: {upload_path}")
+        return send_from_directory(upload_path, file_name)
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        logger.error(f"Error serving file {filename}: {str(e)}")
+        return jsonify({'error': 'File not found'}), 404
 
-@main.route('/api/candidates', methods=['GET'])
-def get_candidates():
+@main.route('/api/chat', methods=['POST'])
+def chat():
     try:
-        candidates = Candidate.query.all()
-        return jsonify([c.to_dict() for c in candidates])
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        message = request.json.get('message', '').strip()
+        state = session.get('state', 'initial')
+        candidate_data = session.get('candidate_data', {})
+        job_id = session.get('job_id')
+        
+        print(f"Chat API - Current job_id in session: {job_id}")  # Debug log
 
-@main.route('/admin/candidates', methods=['GET'])
-def view_candidates():
-    try:
-        candidates = Candidate.query.all()
-        return render_template('candidates.html', candidates=[c.to_dict() for c in candidates])
+        if not job_id:
+            print("No job_id found in session!")  # Debug log
+            return jsonify({
+                'response': 'Session expired. Please start over from the job application link.',
+                'completed': False
+            })
+        
+        # Verify job still exists
+        job = Job.query.get(job_id)
+        if not job:
+            print(f"Job with id {job_id} not found!")  # Debug log
+            return jsonify({
+                'response': 'Invalid job. Please start over from the job application link.',
+                'completed': False
+            })
+
+        print(f"Processing application for job: {job.id} - {job.title}")  # Debug log
+
+        if state == 'initial':
+            # Create a dummy job if none exists
+            job = Job.query.first()
+            if not job:
+                job = Job(title='Software Developer', description='Python Developer Position')
+                db.session.add(job)
+                db.session.commit()
+            
+            # Store job_id in session
+            session['job_id'] = job.id
+            session['state'] = 'greeting'
+            session['candidate_data'] = {}  # Initialize empty candidate data
+            return jsonify({'response': "Hi! I'm the RecruitEase chatbot. I'll help you with your job application. Let's start with your name. What should I call you?"})
+
+        elif state == 'greeting':
+            session['state'] = 'asking_first_name'
+            return jsonify({'response': "Great! What is your first name?"})
+
+        elif state == 'asking_first_name':
+            if not re.match(r'^[a-zA-Z\s]+$', message):
+                return jsonify({'response': 'First name must contain only alphabets. Please try again:'})
+            candidate_data['first_name'] = message.strip()
+            session['state'] = 'asking_last_name'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'What is your last name?'})
+
+        elif state == 'asking_last_name':
+            if not re.match(r'^[a-zA-Z\s]+$', message):
+                return jsonify({'response': 'Last name must contain only alphabets. Please try again:'})
+            candidate_data['last_name'] = message.strip()
+            session['state'] = 'asking_email'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Please enter your personal email address:'})
+
+        elif state == 'asking_email':
+            if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', message):
+                return jsonify({'response': 'Invalid email format. Please enter a valid email address:'})
+            candidate_data['personal_email'] = message.strip()
+            session['state'] = 'asking_mobile'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Please enter your 10-digit mobile number:'})
+
+        elif state == 'asking_mobile':
+            if not re.match(r'^\d{10}$', message):
+                return jsonify({'response': 'Mobile number must be exactly 10 digits. Please try again:'})
+            candidate_data['mobile_no'] = message.strip()
+            session['state'] = 'asking_alternate_mobile'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Would you like to provide an alternate contact number? (Enter the number or type "skip"):'})
+
+        elif state == 'asking_alternate_mobile':
+            if message.lower() != 'skip':
+                if not re.match(r'^\d{10}$', message):
+                    return jsonify({'response': 'Alternate number must be exactly 10 digits. Please try again or type "skip":'})
+                candidate_data['alternate_contact_no'] = message.strip()
+            session['state'] = 'asking_education'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'What is your highest educational qualification?'})
+
+        elif state == 'asking_education':
+            candidate_data['highest_educational_qualifications'] = message.strip()
+            session['state'] = 'asking_academic'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Please enter your academic performance (e.g., "8.5 CGPA" or "75%"):'})
+
+        elif state == 'asking_academic':
+            candidate_data['academic_performance'] = message.strip()
+            session['state'] = 'asking_company'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Are you currently employed? If yes, please enter your company name (or type "no"):'})
+
+        elif state == 'asking_company':
+            if message.lower() != 'no':
+                candidate_data['current_company'] = message.strip()
+                session['state'] = 'asking_designation'
+                session['candidate_data'] = candidate_data
+                return jsonify({'response': 'What is your current designation?'})
+            else:
+                candidate_data['total_experience'] = 0
+                candidate_data['relevant_experience'] = 0
+                session['state'] = 'asking_skills'
+                session['candidate_data'] = candidate_data
+                return jsonify({'response': 'Please enter your primary skills (comma-separated):'})
+
+        elif state == 'asking_designation':
+            candidate_data['current_designation'] = message.strip()
+            session['state'] = 'asking_total_experience'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Please enter your total work experience in years (e.g., 2.5):'})
+
+        elif state == 'asking_total_experience':
+            try:
+                exp = float(message)
+                if exp < 0:
+                    return jsonify({'response': 'Experience cannot be negative. Please try again:'})
+                candidate_data['total_experience'] = exp
+                session['state'] = 'asking_relevant_experience'
+                session['candidate_data'] = candidate_data
+                return jsonify({'response': 'Please enter your relevant experience in years:'})
+            except ValueError:
+                return jsonify({'response': 'Please enter a valid number for experience (e.g., 2.5):'})
+
+        elif state == 'asking_relevant_experience':
+            try:
+                exp = float(message)
+                if exp < 0:
+                    return jsonify({'response': 'Experience cannot be negative. Please try again:'})
+                candidate_data['relevant_experience'] = exp
+                session['state'] = 'asking_skills'
+                session['candidate_data'] = candidate_data
+                return jsonify({'response': 'Please enter your primary skills (comma-separated):'})
+            except ValueError:
+                return jsonify({'response': 'Please enter a valid number for experience (e.g., 2.5):'})
+
+        elif state == 'asking_skills':
+            candidate_data['primary_skills'] = message.strip()
+            session['state'] = 'asking_resume'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Please upload your resume (PDF/DOC format):'})
+
+        elif state == 'asking_resume':
+            if message.lower() == 'resume uploaded':
+                session['state'] = 'asking_video'
+                session['candidate_data'] = candidate_data
+                return jsonify({'response': 'Great! Now, please record a short self-introduction video (maximum 2 minutes):'})
+            return jsonify({'response': 'Please use the upload button to submit your resume.'})
+
+        elif state == 'asking_video':
+            if message.lower() == 'video uploaded':
+                session['state'] = 'asking_referral'
+                session['candidate_data'] = candidate_data
+                return jsonify({'response': 'Were you referred by someone? If yes, please enter their name (or type "no"):'})
+            return jsonify({'response': 'Please use the record button to submit your video.'})
+
+        elif state == 'asking_referral':
+            if message.lower() != 'no':
+                candidate_data['referred_by'] = message.strip()
+            session['state'] = 'asking_declaration'
+            session['candidate_data'] = candidate_data
+            return jsonify({'response': 'Please confirm that all information provided is true and accurate (type "yes" to confirm):'})
+
+        elif state == 'asking_declaration':
+            if message.lower() != 'yes':
+                return jsonify({'response': 'You must confirm the declaration to proceed. Type "yes" to confirm:'})
+            
+            try:
+                # Create candidate object with the correct job_id
+                candidate = Candidate(
+                    job_id=job_id,  # Use the job_id from session
+                    first_name=candidate_data['first_name'],
+                    last_name=candidate_data['last_name'],
+                    personal_email=candidate_data['personal_email'],
+                    mobile_no=candidate_data['mobile_no'],
+                    alternate_contact_no=candidate_data.get('alternate_contact_no'),
+                    highest_educational_qualifications=candidate_data['highest_educational_qualifications'],
+                    academic_performance=candidate_data['academic_performance'],
+                    current_company=candidate_data.get('current_company'),
+                    current_designation=candidate_data.get('current_designation'),
+                    total_experience=float(candidate_data['total_experience']),
+                    relevant_experience=float(candidate_data['relevant_experience']),
+                    primary_skills=candidate_data['primary_skills'],
+                    resume_attachments=candidate_data.get('resume_attachments'),
+                    self_introduction_video=candidate_data.get('self_introduction_video'),
+                    referred_by=candidate_data.get('referred_by'),
+                    self_declaration=True,
+                    submitted_at=datetime.utcnow()
+                )
+                
+                print(f"About to save candidate for job: {job.id} - {job.title}")  # Debug log
+                
+                db.session.add(candidate)
+                db.session.commit()
+                
+                print(f"Successfully saved candidate with ID: {candidate.id} for job: {job.id} - {job.title}")  # Debug log
+                
+                # Clear session after successful save
+                session.clear()
+                
+                return jsonify({
+                    'response': 'Thank you for completing your application! We will review your information and get back to you soon.',
+                    'completed': True,
+                    'stopRecording': True
+                })
+            except Exception as e:
+                db.session.rollback()
+                print(f"Error saving candidate: {str(e)}")
+                print(f"Current session data: {session.get('candidate_data')}")
+                return jsonify({
+                    'response': f'Error saving your application: {str(e)}. Please try again.',
+                    'stopRecording': True
+                })
+
+        # Rest of the chat logic...
+        session['candidate_data'] = candidate_data
+        return jsonify({'response': 'Invalid state. Please start over.'})
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in chat route: {str(e)}")  # Debug log
+        return jsonify({'response': f'An error occurred: {str(e)}. Please try again.'})

@@ -194,6 +194,139 @@ class Background {
     }
 }
 
-window.addEventListener('load', () => {
+let scene, camera, renderer, objects = [];
+
+function init() {
+    // Create scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    // Create camera
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    // Create renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('background-canvas').appendChild(renderer.domElement);
+
+    // Add objects
+    addObjects();
+
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const pointLight = new THREE.PointLight(0xffffff, 0.5);
+    pointLight.position.set(5, 5, 5);
+    scene.add(pointLight);
+
+    // Start animation
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', onWindowResize, false);
+}
+
+function addObjects() {
+    const geometries = [
+        new THREE.TorusKnotGeometry(0.3, 0.1, 64, 8),
+        new THREE.OctahedronGeometry(0.3),
+        new THREE.TetrahedronGeometry(0.3),
+        new THREE.SphereGeometry(0.2, 32, 32)
+    ];
+
+    const materials = [
+        new THREE.MeshPhongMaterial({ 
+            color: 0x4a90e2,
+            shininess: 100,
+            transparent: true,
+            opacity: 0.7
+        }),
+        new THREE.MeshPhongMaterial({ 
+            color: 0x27ae60,
+            shininess: 100,
+            transparent: true,
+            opacity: 0.7
+        }),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xe74c3c,
+            shininess: 100,
+            transparent: true,
+            opacity: 0.7
+        }),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xf1c40f,
+            shininess: 100,
+            transparent: true,
+            opacity: 0.7
+        })
+    ];
+
+    for (let i = 0; i < 15; i++) {
+        const geometry = geometries[Math.floor(Math.random() * geometries.length)];
+        const material = materials[Math.floor(Math.random() * materials.length)];
+        const object = new THREE.Mesh(geometry, material);
+
+        object.position.x = Math.random() * 10 - 5;
+        object.position.y = Math.random() * 10 - 5;
+        object.position.z = Math.random() * 10 - 5;
+
+        object.rotation.x = Math.random() * 2 * Math.PI;
+        object.rotation.y = Math.random() * 2 * Math.PI;
+        object.rotation.z = Math.random() * 2 * Math.PI;
+
+        object.speed = {
+            rotation: new THREE.Vector3(
+                Math.random() * 0.01 - 0.005,
+                Math.random() * 0.01 - 0.005,
+                Math.random() * 0.01 - 0.005
+            ),
+            position: new THREE.Vector3(
+                Math.random() * 0.01 - 0.005,
+                Math.random() * 0.01 - 0.005,
+                Math.random() * 0.01 - 0.005
+            )
+        };
+
+        objects.push(object);
+        scene.add(object);
+    }
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    objects.forEach(object => {
+        // Rotate object
+        object.rotation.x += object.speed.rotation.x;
+        object.rotation.y += object.speed.rotation.y;
+        object.rotation.z += object.speed.rotation.z;
+
+        // Move object
+        object.position.x += object.speed.position.x;
+        object.position.y += object.speed.position.y;
+        object.position.z += object.speed.position.z;
+
+        // Bounce off boundaries
+        ['x', 'y', 'z'].forEach(axis => {
+            if (Math.abs(object.position[axis]) > 5) {
+                object.speed.position[axis] *= -1;
+            }
+        });
+    });
+
+    renderer.render(scene, camera);
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// Initialize when document is loaded
+document.addEventListener('DOMContentLoaded', () => {
     new Background();
+    init();
 });
