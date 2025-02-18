@@ -3,6 +3,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from app.models import db, Job, Candidate
 from datetime import datetime, timedelta
 import secrets
+import os
+from flask import current_app
 
 admin = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -23,25 +25,27 @@ def index():
 @admin.route('/jobs/new', methods=['GET', 'POST'])
 def new_job():
     if request.method == 'POST':
-        try:
-            # Create a new job
-            job = Job(
-                title=request.form.get('title'),
-                description=request.form.get('description'),
-                link_hash=secrets.token_urlsafe(16),
-                start_date=datetime.utcnow(),
-                end_date=datetime.utcnow() + timedelta(days=30),  # Example end date
-                is_active=True
-            )
-            db.session.add(job)
-            db.session.commit()  # Ensure this line is present
-            flash('Job created successfully!', 'success')
-            return redirect(url_for('admin.index'))
-        except Exception as e:
-            logger.error(f"Error creating job: {str(e)}")
-            db.session.rollback()  # Rollback on error
-            flash('Error creating job. Please try again.', 'error')
-
+        title = request.form.get('title')
+        description = request.form.get('description')
+        days_valid = int(request.form.get('days_valid', 0))
+        hours_valid = int(request.form.get('hours_valid', 0))
+        minutes_valid = int(request.form.get('minutes_valid', 0))
+        
+        # Ensure at least one time unit is provided
+        if days_valid == 0 and hours_valid == 0 and minutes_valid == 0:
+            flash('Please specify a valid time duration', 'error')
+            return redirect(url_for('admin.new_job'))
+        
+        job = Job(title=title, description=description)
+        db.session.add(job)
+        db.session.commit()
+        
+        # Generate link with custom expiry time
+        job.generate_link(days_valid=days_valid, hours_valid=hours_valid, minutes_valid=minutes_valid)
+        
+        flash('Job created successfully!', 'success')
+        return redirect(url_for('admin.index'))
+    
     return render_template('admin/new_job.html')
 
 @admin.route('/view_job/<int:job_id>')
@@ -134,3 +138,28 @@ def get_candidates():
         'skills': c.primary_skills,
         'submitted_at': c.submitted_at.strftime('%Y-%m-%d %H:%M:%S')
     } for c in candidates])
+
+@admin.route('/delete_candidate/<int:candidate_id>', methods=['POST'])
+def delete_candidate(candidate_id):
+    candidate = Candidate.query.get_or_404(candidate_id)
+    
+    try:
+        # Delete associated files
+        if candidate.resume_attachments:
+            resume_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'resumes', candidate.resume_attachments)
+            if os.path.exists(resume_path):
+                os.remove(resume_path)
+        
+        if candidate.self_introduction_video:
+            video_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'videos', candidate.self_introduction_video)
+            if os.path.exists(video_path):
+                os.remove(video_path)
+        
+        # Delete the candidate record
+        db.session.delete(candidate)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Candidate deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
