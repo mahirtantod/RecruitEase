@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import validates
 import secrets
 import re
+import pytz
 
 class Job(db.Model):
     """Job model to store available positions"""
@@ -10,22 +11,44 @@ class Job(db.Model):
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
     link_hash = db.Column(db.String(50), unique=True)
-    start_date = db.Column(db.DateTime, default=datetime.utcnow)
+    start_date = db.Column(db.DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
     end_date = db.Column(db.DateTime)
     is_active = db.Column(db.Boolean, default=True)
-    candidates = db.relationship('Candidate', backref='job', lazy=True)
+    candidates = db.relationship('Candidate', backref='job', lazy=True, cascade="all, delete-orphan")
 
-    def generate_link(self, days_valid=10):
+    def generate_link(self, days_valid=10, hours_valid=0, minutes_valid=0):
         """Generate a unique link hash and set expiry date"""
-        self.link_hash = secrets.token_urlsafe(16)
-        self.start_date = datetime.utcnow()
-        self.end_date = self.start_date + timedelta(days=days_valid)
-        self.is_active = True
+        if not self.link_hash:
+            self.link_hash = secrets.token_urlsafe(16)
+        
+        # Set expiry date in Indian timezone
+        ist = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(ist)
+        
+        # Calculate expiry time
+        self.end_date = current_time + timedelta(
+            days=days_valid,
+            hours=hours_valid,
+            minutes=minutes_valid
+        )
+        
+        db.session.commit()
         return self.link_hash
 
     def is_expired(self):
         """Check if the job posting has expired"""
-        return datetime.utcnow() > self.end_date if self.end_date else False
+        if not self.end_date:
+            return False
+        
+        # Convert current time to IST
+        ist = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(ist)
+        
+        # Make end_date timezone aware if it isn't
+        if self.end_date.tzinfo is None:
+            self.end_date = ist.localize(self.end_date)
+            
+        return current_time > self.end_date
 
     def get_application_link(self):
         """Get the full application link"""
