@@ -234,16 +234,9 @@
                         text: '<svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Export to Excel',
                         className: 'export-excel-btn',
                         exportOptions: {
-                            columns: ':visible',
-                            format: {
-                                body: function(data, row, column, node) {
-                                    // For resume and video columns, use the full URL
-                                    if (column === 13 || column === 14) { // Resume and Video columns
-                                        var url = $(node).data('export-url');
-                                        return url ? url : '-';
-                                    }
-                                    return data;
-                                }
+                            columns: function(idx, data, node) {
+                                // Exclude Resume (13), Video (14), and Actions (17) columns
+                                return ![13, 14, 17].includes(idx);
                             }
                         }
                     }
