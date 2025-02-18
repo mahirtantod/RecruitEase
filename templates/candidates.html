@@ -1,59 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Candidate List - RecruitEase</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>RecruitEase Admin - Candidates</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.dataTables.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.2.9/css/responsive.dataTables.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
+    <style>
+        .dataTables_wrapper .dt-buttons .dt-button {
+            background: #10B981 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 0.375rem !important;
+            padding: 0.5rem 1rem !important;
+            font-weight: 600 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+            transition: all 0.2s !important;
+        }
+        .dataTables_wrapper .dt-buttons .dt-button:hover {
+            background: #059669 !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        }
+        .dataTables_wrapper {
+            padding: 1rem;
+        }
+        .dataTables_filter input {
+            border: 1px solid #E5E7EB !important;
+            border-radius: 0.375rem !important;
+            padding: 0.5rem !important;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        #candidates-table {
+            width: 100% !important;
+        }
+        #candidates-table th, #candidates-table td {
+            white-space: nowrap;
+            padding: 1rem !important;
+        }
+        #candidates-table thead th {
+            background-color: #F3F4F6 !important;
+            font-weight: 600 !important;
+        }
+        #candidates-table tbody tr:hover {
+            background-color: #F9FAFB !important;
+        }
+        .btn-link {
+            color: #2563EB;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .btn-link:hover {
+            text-decoration: underline;
+        }
+        .btn-back-dashboard {
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: 500;
+            background-color: #2563EB;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+        }
+        .btn-back-dashboard:hover {
+            background-color: #0747a8;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
-<body class="bg-gradient-to-r from-blue-50 to-indigo-50 min-h-screen">
+<body class="bg-gray-50">
     <div class="container mx-auto px-4 py-8">
-        <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center">Candidates List</h2>
-        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0"></h2>
+            <a href="{{ url_for('admin.index') }}" class="btn btn-back-dashboard">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+        <div class="flex items-center justify-between mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Candidate Applications</h1>
+            <div class="flex items-center space-x-4">
+                <!-- Job Filter -->
+                <div class="relative">
+                    <label for="job-filter" class="block text-sm font-medium text-gray-700 mb-2">Filter by Job:</label>
+                    <select id="job-filter" class="block w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm">
+                        <option value="">All Jobs</option>
+                        {% for job in jobs %}
+                        <option value="{{ job.id }}" {% if selected_job_id == job.id %}selected{% endif %}>{{ job.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg">
+            <div class="table-container">
+                <table id="candidates-table" class="w-full">
+                    <thead>
                         <tr>
-                            <th class="px-6 py-3 text-left">ID</th>
-                            <th class="px-6 py-3 text-left">Name</th>
-                            <th class="px-6 py-3 text-left">Email</th>
-                            <th class="px-6 py-3 text-left">Education</th>
-                            <th class="px-6 py-3 text-left">CGPA</th>
-                            <th class="px-6 py-3 text-left">Skills</th>
-                            <th class="px-6 py-3 text-left">Projects</th>
-                            <th class="px-6 py-3 text-left">Achievements</th>
-                            <th class="px-6 py-3 text-left">Video</th>
-                            <th class="px-6 py-3 text-left">Created At</th>
+                            <th>ID</th>
+                            <th>Job Title</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Mobile</th>
+                            <th>Alt. Contact</th>
+                            <th>Education</th>
+                            <th>Academic Performance</th>
+                            <th>Current Company</th>
+                            <th>Designation</th>
+                            <th>Total Exp.</th>
+                            <th>Relevant Exp.</th>
+                            <th>Skills</th>
+                            <th>Resume</th>
+                            <th>Video</th>
+                            <th>Referred By</th>
+                            <th>Submitted At</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200">
+                    <tbody>
                         {% for candidate in candidates %}
-                        <tr class="hover:bg-gray-50 transition-colors duration-200">
-                            <td class="px-6 py-4">{{ candidate.id }}</td>
-                            <td class="px-6 py-4">
-                                {{ candidate.first_name }}
-                                {% if candidate.middle_name %}
-                                    {{ candidate.middle_name }}
-                                {% endif %}
-                                {{ candidate.last_name }}
-                            </td>
-                            <td class="px-6 py-4">{{ candidate.email }}</td>
-                            <td class="px-6 py-4">{{ candidate.education }}</td>
-                            <td class="px-6 py-4">{{ candidate.cgpa }}</td>
-                            <td class="px-6 py-4">{{ candidate.skills }}</td>
-                            <td class="px-6 py-4">{{ candidate.projects }}</td>
-                            <td class="px-6 py-4">{{ candidate.achievements or 'N/A' }}</td>
-                            <td class="px-6 py-4">
-                                {% if candidate.video_path %}
-                                <video width="200" controls class="rounded-lg shadow">
-                                    <source src="{{ candidate.video_path }}" type="video/webm">
-                                    Your browser does not support the video tag.
-                                </video>
+                        <tr id="candidate-{{ candidate.id }}">
+                            <td>{{ candidate.id }}</td>
+                            <td>{{ candidate.job.title }}</td>
+                            <td>{{ candidate.first_name }} {{ candidate.last_name }}</td>
+                            <td>{{ candidate.personal_email }}</td>
+                            <td>{{ candidate.mobile_no }}</td>
+                            <td>{{ candidate.alternate_contact_no or '-' }}</td>
+                            <td>{{ candidate.highest_educational_qualifications }}</td>
+                            <td>{{ candidate.academic_performance }}</td>
+                            <td>{{ candidate.current_company or '-' }}</td>
+                            <td>{{ candidate.current_designation or '-' }}</td>
+                            <td>{{ candidate.total_experience }} years</td>
+                            <td>{{ candidate.relevant_experience }} years</td>
+                            <td>{{ candidate.primary_skills }}</td>
+                            <td data-export-url="{{ request.host_url }}uploads/{{ candidate.resume_attachments if candidate.resume_attachments else '' }}">
+                                {% if candidate.resume_attachments %}
+                                <a href="/uploads/{{ candidate.resume_attachments }}" target="_blank" class="btn-link">View Resume</a>
                                 {% else %}
-                                <span class="text-gray-400">No video</span>
+                                -
                                 {% endif %}
                             </td>
-                            <td class="px-6 py-4">{{ candidate.created_at }}</td>
+                            <td data-export-url="{{ request.host_url }}uploads/{{ candidate.self_introduction_video if candidate.self_introduction_video else '' }}">
+                                {% if candidate.self_introduction_video %}
+                                <a href="/uploads/{{ candidate.self_introduction_video }}" target="_blank" class="btn-link">View Video</a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ candidate.referred_by or '-' }}</td>
+                            <td>{{ candidate.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                <button onclick="deleteCandidate({{ candidate.id }})" class="btn btn-sm btn-danger btn-delete">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </td>
+                            
+                            <style>
+                                .btn-delete {
+                                    background-color: #dc3545; /* Bootstrap danger red */
+                                    color: white;
+                                    font-weight: bold;
+                                    border: none;
+                                    border-radius: 25px; /* Rounded edges */
+                                    padding: 8px 16px;
+                                    transition: all 0.3s ease-in-out;
+                                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                                }
+                            
+                                .btn-delete:hover {
+                                    background-color: #b51d2a;
+                                    transform: scale(1.05);
+                                    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+                                }
+                            </style>
+                            
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -61,5 +194,77 @@
             </div>
         </div>
     </div>
+
+    <script>
+        function deleteCandidate(candidateId) {
+            if (confirm('Are you sure you want to delete this candidate? This action cannot be undone.')) {
+                fetch(`/admin/delete_candidate/${candidateId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove the row from the table
+                        $(`#candidate-${candidateId}`).remove();
+                        alert('Candidate deleted successfully');
+                    } else {
+                        alert('Error deleting candidate: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting candidate');
+                });
+            }
+        }
+
+        $(document).ready(function() {
+            // Initialize DataTable with Excel export
+            var table = $('#candidates-table').DataTable({
+                order: [[0, 'desc']],
+                pageLength: 25,
+                scrollX: true,
+                dom: '<"flex items-center justify-between mb-4"Bf>rt<"flex items-center justify-between mt-4"ip>',
+                buttons: [
+                    {
+                        extend: 'excel',
+                        text: '<svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Export to Excel',
+                        className: 'export-excel-btn',
+                        exportOptions: {
+                            columns: ':visible',
+                            format: {
+                                body: function(data, row, column, node) {
+                                    // For resume and video columns, use the full URL
+                                    if (column === 13 || column === 14) { // Resume and Video columns
+                                        var url = $(node).data('export-url');
+                                        return url ? url : '-';
+                                    }
+                                    return data;
+                                }
+                            }
+                        }
+                    }
+                ],
+                initComplete: function() {
+                    // Style the search input
+                    $('.dataTables_filter input').addClass('border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500');
+                }
+            });
+
+            // Job filter functionality
+            $('#job-filter').change(function() {
+                var jobId = $(this).val();
+                window.location.href = jobId ? '/admin/candidates?job_id=' + jobId : '/admin/candidates';
+            });
+
+            // Make the table responsive on window resize
+            $(window).resize(function() {
+                table.columns.adjust();
+            });
+        });
+    </script>
 </body>
 </html>
