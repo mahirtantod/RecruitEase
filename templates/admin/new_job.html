@@ -1,28 +1,47 @@
-{% extends "base.html" %} 
+{% extends "base.html" %}
+
+{% block title %}New Job{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1>Create New Job Posting</h1>
-    <form method="POST" class="mt-4">
-        <div class="mb-3">
-            <label for="title" class="form-label">Job Title</label>
-            <input type="text" class="form-control" id="title" name="title" required>
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Create New Job Position</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Job Title</label>
+                            <input type="text" class="form-control" id="title" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Job Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="5" required></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="days_valid" class="form-label">Valid for (Days)</label>
+                                <input type="number" class="form-control" id="days_valid" name="days_valid" value="0" min="0">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="hours_valid" class="form-label">Hours</label>
+                                <input type="number" class="form-control" id="hours_valid" name="hours_valid" value="0" min="0" max="23">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="minutes_valid" class="form-label">Minutes</label>
+                                <input type="number" class="form-control" id="minutes_valid" name="minutes_valid" value="0" min="0" max="59">
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <a href="{{ url_for('admin.index') }}" class="btn btn-secondary me-2">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Create Job</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-        
-        <div class="mb-3">
-            <label for="description" class="form-label">Job Description</label>
-            <textarea class="form-control" id="description" name="description" rows="5" required></textarea>
-        </div>
-        
-        <div class="mb-3">
-            <label for="days_valid" class="form-label">Link Valid for (days)</label>
-            <input type="number" class="form-control" id="days_valid" name="days_valid" value="10" min="1" max="365" required>
-        </div>
-        
-        <div class="mb-3">
-            <button type="submit" class="btn btn-primary">Create Job</button>
-            <a href="{{ url_for('admin.index') }}" class="btn btn-secondary">Cancel</a>
-        </div>
-    </form>
+    </div>
 </div>
 {% endblock %}
